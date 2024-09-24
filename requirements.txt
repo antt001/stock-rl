@@ -5,3 +5,4 @@ gym
 matplotlib
 yfinance
 tqdm
+Tcl

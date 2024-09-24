@@ -91,6 +91,7 @@ pip install numpy pandas matplotlib torch gym
 
 ```
 trading_rl_agent.py      # Main script containing the code
+dqn_agent.py             # RL agent implementation
 stock_data.csv           # Historical stock data (provided by the user)
 net_worth_over_time.png  # Output plot after evaluation
 README.md                # Project documentation

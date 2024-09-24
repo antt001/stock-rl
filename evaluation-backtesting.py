@@ -1,50 +1,25 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+def evaluate_agent(env, agent):
+    state = env.reset()
+    state = torch.FloatTensor(state)
+    total_reward = 0
+    net_worths = []
 
-def evaluate_model(model, env, episodes=1):
-    total_rewards = []
-    for _ in range(episodes):
-        state = env.reset()
-        done = False
-        episode_reward = 0
-        while not done:
-            state = torch.FloatTensor(state).unsqueeze(0).to(model.device)
-            with torch.no_grad():
-                action = torch.argmax(model(state)).item()
-            state, reward, done, _ = env.step(action)
-            episode_reward += reward
-        total_rewards.append(episode_reward)
-    return np.mean(total_rewards)
+    for t in range(env.total_steps):
+        with torch.no_grad():
+            q_values = agent(state)
+            action = torch.argmax(q_values).item()
 
-# Load test data
-test_df = pd.read_csv('test_stock_data.csv')
-test_env = TradingEnv(test_df)
+        next_state, reward, done, _ = env.step(action)
+        state = torch.FloatTensor(next_state)
+        total_reward += reward
+        net_worths.append(env.net_worth)
 
-# Load the trained model
-trained_model = DQN(state_size, action_size).to(agent.device)
-trained_model.load_state_dict(torch.load('trading_model.pth'))
-trained_model.eval()
+        if done:
+            break
 
-# Evaluate the model
-average_reward = evaluate_model(trained_model, test_env)
-print(f"Average reward on test data: {average_reward}")
-
-# Backtest the strategy
-state = test_env.reset()
-done = False
-portfolio_values = [test_env.initial_balance]
-
-while not done:
-    state = torch.FloatTensor(state).unsqueeze(0).to(trained_model.device)
-    with torch.no_grad():
-        action = torch.argmax(trained_model(state)).item()
-    state, reward, done, _ = test_env.step(action)
-    portfolio_values.append(test_env.balance + test_env.owned_shares * test_env.df.iloc[test_env.current_step]['close'])
-
-# Plot results
-plt.figure(figsize=(10, 6))
-plt.plot(portfolio_values)
-plt.title('Portfolio Value Over Time')
-plt.xlabel('Trading Steps')
-plt.ylabel('Portfolio Value')
-plt.show()
+    # Plotting net worth over time
+    plt.plot(net_worths)
+    plt.title('Agent Net Worth Over Time')
+    plt.xlabel('Time Steps')
+    plt.ylabel('Net Worth')
+    plt.show()
