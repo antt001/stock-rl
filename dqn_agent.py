@@ -2,15 +2,27 @@ import torch.nn as nn
 # import torch.optim as optim
 
 class DQNAgent(nn.Module):
-    def __init__(self, state_size, action_size):
+    def __init__(self, input_size, action_size, hidden_size=64, n_layers=1):
         super(DQNAgent, self).__init__()
-        self.fc1 = nn.Linear(state_size, 128)
-        self.relu1 = nn.ReLU()
-        self.fc2 = nn.Linear(128, 64)
-        self.relu2 = nn.ReLU()
-        self.out = nn.Linear(64, action_size)
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+
+        # LSTM layer
+        self.lstm = nn.LSTM(input_size, hidden_size, n_layers, batch_first=True)
+
+        # Fully connected layers
+        self.fc1 = nn.Linear(hidden_size, 32)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(32, action_size)
 
     def forward(self, state):
-        x = self.relu1(self.fc1(state))
-        x = self.relu2(self.fc2(x))
-        return self.out(x)
+        # state shape: (batch_size, n_steps, input_size)
+        h0 = torch.zeros(self.n_layers, state.size(0), self.hidden_size).to(state.device)
+        c0 = torch.zeros(self.n_layers, state.size(0), self.hidden_size).to(state.device)
+
+        out, _ = self.lstm(state, (h0, c0))  # out shape: (batch_size, n_steps, hidden_size)
+        out = out[:, -1, :]  # Get the output of the last time step
+
+        out = self.relu(self.fc1(out))
+        out = self.fc2(out)
+        return out
