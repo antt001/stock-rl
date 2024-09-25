@@ -1,5 +1,4 @@
 import torch.nn as nn
-# import torch.optim as optim
 
 class DQNAgent(nn.Module):
     def __init__(self, input_size, action_size, hidden_size=64, n_layers=1):

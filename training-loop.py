@@ -3,29 +3,32 @@ from collections import deque
 import yfinance as yf
 from trading_env import TradingEnv
 from dqn_agent import DQNAgent
+from evaluation import evaluate_agent
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
-# import matplotlib
-# matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
 
 # Before initializing the environment
 n_steps = 10  # Adjust as needed
 
-def train_dqn(env, agent, episodes=50, batch_size=32, gamma=0.99, epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995):
+def train_dqn(env, agent, episodes=50, batch_size=32, gamma=0.99,
+              epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995):
     memory = deque(maxlen=2000)
     optimizer = optim.Adam(agent.parameters(), lr=0.001)
     criterion = nn.MSELoss()
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    agent.to(device)
+
     for episode in range(episodes):
         state = env.reset()
-        state = torch.FloatTensor(state)
+        state = torch.FloatTensor(state).unsqueeze(0).to(device)  # Shape: (1, n_steps, input_size)
         total_reward = 0
 
-        for t in range(env.total_steps):
+        for t in range(env.total_steps - env.n_steps):
+            # Epsilon-greedy action selection
             if random.random() <= epsilon:
                 action = env.action_space.sample()
             else:
@@ -33,32 +36,39 @@ def train_dqn(env, agent, episodes=50, batch_size=32, gamma=0.99, epsilon=1.0, e
                     q_values = agent(state)
                     action = torch.argmax(q_values).item()
 
+            # Take action and observe result
             next_state, reward, done, _ = env.step(action)
-            next_state = torch.FloatTensor(next_state)
-            memory.append((state, action, reward, next_state, done))
+            next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0).to(device)
 
-            state = next_state
+            # Store experience in memory
+            memory.append((state, action, reward, next_state_tensor, done))
+
+            state = next_state_tensor
             total_reward += reward
 
-            if done:
-                print(f"Episode {episode+1}/{episodes}, Total Reward: {total_reward}")
-                break
-
+            # Experience replay
             if len(memory) >= batch_size:
                 minibatch = random.sample(memory, batch_size)
-                train_minibatch(agent, optimizer, criterion, minibatch, gamma)
+                train_minibatch(agent, optimizer, criterion, minibatch, gamma, device)
 
+            if done:
+                print(f"Episode {episode+1}/{episodes}, Total Reward: {total_reward:.2f}")
+                break
+
+        # Decay epsilon
         if epsilon > epsilon_min:
             epsilon *= epsilon_decay
 
-def train_minibatch(agent, optimizer, criterion, minibatch, gamma):
+def train_minibatch(agent, optimizer, criterion, minibatch, gamma, device):
     states, actions, rewards, next_states, dones = zip(*minibatch)
 
-    states = torch.stack(states)
-    actions = torch.LongTensor(actions).unsqueeze(1)
-    rewards = torch.FloatTensor(rewards)
-    next_states = torch.stack(next_states)
-    dones = torch.FloatTensor(dones)
+    # Stack states and next_states
+    states = torch.cat(states)  # Shape: (batch_size, n_steps, input_size)
+    next_states = torch.cat(next_states)
+
+    actions = torch.LongTensor(actions).unsqueeze(1).to(device)
+    rewards = torch.FloatTensor(rewards).to(device)
+    dones = torch.FloatTensor(dones).to(device)
 
     # Current Q values
     current_q_values = agent(states).gather(1, actions)
@@ -77,42 +87,6 @@ def train_minibatch(agent, optimizer, criterion, minibatch, gamma):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-
-def evaluate_agent(env, agent):
-    state = env.reset()
-    state = torch.FloatTensor(state)
-    total_reward = 0
-    net_worths = []
-    balances = []
-    positions = []
-
-    for t in range(env.total_steps):
-        with torch.no_grad():
-            q_values = agent(state)
-            action = torch.argmax(q_values).item()
-            print(f"Action: {action}")
-            print(f"Q-Values: {q_values}")
-
-        next_state, reward, done, _ = env.step(action)
-        state = torch.FloatTensor(next_state)
-        total_reward += reward
-        net_worths.append(env.net_worth)
-        balances.append(env.balance)
-        positions.append(env.shares_held)
-
-        if done:
-            break
-
-    # Plotting net worth over time
-    plt.figure(figsize=(12, 6))
-    plt.plot(net_worths)
-    plt.title('Agent Net Worth Over Time')
-    plt.xlabel('Time Steps')
-    plt.ylabel('Net Worth ($)')
-    plt.show()
-
-    print(f"Final Net Worth: ${env.net_worth:.2f}")
-    print(f"Total Reward from Evaluation: {total_reward:.2f}")
 
 # Training loop
 # load data from yfinance
@@ -150,17 +124,24 @@ df.drop(['H-L', 'H-PC', 'L-PC', 'TR'], axis=1, inplace=True)
 # Handle NaN values after adding indicators
 df.fillna(method='bfill', inplace=True)
 
-# create environment
-env = TradingEnv(df, n_steps=n_steps, scaler=scaler)
-# Get the size of the state and action space
-state_size = env.observation_space.shape[0]
+# Reset index after adding indicators
+df.reset_index(drop=True, inplace=True)
+
+# Set the window size for past observations
+n_steps = 10  # Adjust as needed
+
+# Initialize the environment
+env = TradingEnv(df, n_steps=n_steps)
+
+# Get the input size from the environment
+input_size = env.observation_space.shape[2]
 action_size = env.action_space.n
 
-# Create the agent
-agent = DQNAgent(state_size, action_size)
+# Initialize the agent
+agent = DQNAgent(input_size, action_size)
 
 # Train the agent
-train_dqn(env, agent, episodes=1000, batch_size=32)
+train_dqn(env, agent, episodes=50, batch_size=32)
 
 # Evaluate the agent
 evaluate_agent(env, agent)
