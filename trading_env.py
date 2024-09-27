@@ -16,7 +16,7 @@ from gym.spaces import Discrete, Box
 INITIAL_BALANCE = 10000
 
 class TradingEnv(Env):
-    def __init__(self, df, n_steps=10, initial_balance=10000):
+    def __init__(self, df, n_steps=10, initial_balance=10000, fee_structure='percentage'):
         super(TradingEnv, self).__init__()
         self.df = df
         self.n_steps = n_steps
@@ -35,6 +35,7 @@ class TradingEnv(Env):
         self.entry_price = 0
         self.stop_loss_price = None
         self.prev_net_worth = self.net_worth
+        self.fee_structure = fee_structure  # 'percentage' or 'per_share'
 
         # Observation space dimensions
         self.num_features = 11  # Number of features per time step
@@ -43,6 +44,19 @@ class TradingEnv(Env):
         self.observation_space = Box(
             low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
         )
+
+    def calculate_transaction_cost_percentage(self, trade_value):
+        fee_rate = 0.001  # 0.1% fee
+        transaction_cost = fee_rate * trade_value
+        return transaction_cost
+
+    def calculate_transaction_cost_per_share(self, shares_traded):
+        cost_per_share = 0.01  # $0.01 per share
+        transaction_cost = shares_traded * cost_per_share
+        minimum_fee = 6.5
+        if transaction_cost < minimum_fee:
+            transaction_cost = minimum_fee
+        return transaction_cost
 
     def _next_observation(self):
         # Get the data points for the last n_steps days
@@ -76,10 +90,19 @@ class TradingEnv(Env):
         current_price = self.df.loc[self.current_step, 'Close']
         current_atr = self.df.loc[self.current_step, 'ATR']
 
+         # Determine transaction cost based on fee structure
+        def get_transaction_cost(trade_value, shares_traded):
+            if self.fee_structure == 'percentage':
+                return self.calculate_transaction_cost_percentage(trade_value)
+            elif self.fee_structure == 'per_share':
+                return self.calculate_transaction_cost_per_share(shares_traded)
+            else:
+                return 0
+
         # Execute action
         if action == 1:  # Buy
             # Determine position size based on risk management
-            max_loss = self.net_worth * 0.05  # Risk no more than 5% of net worth
+            max_loss = self.net_worth * 0.02  # Risk no more than 2% of net worth
             atr_multiplier = 1  # Adjust as needed
             stop_loss_distance = current_atr * atr_multiplier
             position_size = max_loss / stop_loss_distance
@@ -88,7 +111,17 @@ class TradingEnv(Env):
             shares_to_buy = min(
                 position_size, self.balance // current_price
             )
-            self.balance -= shares_to_buy * current_price
+
+            # Calculate trade value
+            trade_value = shares_to_buy * current_price
+
+            # Calculate transaction cost
+            transaction_cost = get_transaction_cost(trade_value, shares_to_buy)
+
+            # Update balance and shares held
+            total_cost = trade_value + transaction_cost
+
+            self.balance -= total_cost
             self.shares_held += shares_to_buy
             self.entry_price = current_price  # Set entry price for stop-loss calculation
 
@@ -97,7 +130,13 @@ class TradingEnv(Env):
 
         elif action == 2:  # Sell
             # Sell all shares held
-            self.balance += self.shares_held * current_price
+            # Calculate trade value
+            trade_value = self.shares_held * current_price
+            # Calculate transaction cost
+            transaction_cost = get_transaction_cost(trade_value, self.shares_held)
+            # Update balance and shares held
+            total_proceeds = trade_value - transaction_cost
+            self.balance += total_proceeds
             self.shares_held = 0
             self.entry_price = 0
             self.stop_loss_price = None
@@ -108,11 +147,19 @@ class TradingEnv(Env):
         # Check if stop-loss is hit
         if self.shares_held > 0 and current_price <= self.stop_loss_price:
             # Sell all shares held
-            self.balance += self.shares_held * current_price
+             # Calculate trade value
+            trade_value = self.shares_held * current_price
+
+            # Calculate transaction cost
+            transaction_cost = get_transaction_cost(trade_value, self.shares_held)
+
+            # Update balance and shares held
+            total_proceeds = trade_value - transaction_cost
+            self.balance += total_proceeds
             self.shares_held = 0
             self.entry_price = 0
             self.stop_loss_price = None
-            print(f"Stop-loss triggered at price {current_price:.2f}")
+            # print(f"Stop-loss triggered at price {current_price:.2f}")
 
         # Update net worth after action
         self.net_worth = self.balance + self.shares_held * current_price
