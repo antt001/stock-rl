@@ -21,6 +21,8 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     net_worths = []
 
     prices = []  # To store the prices over time
+    adx_values = []
+    rsi_values = []
     actions = []  # To store the actions taken
     trade_positions = []  # To store entry and exit points
     timestamps = []  # To store time steps
@@ -40,6 +42,14 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
          # Get current price
         current_price = env.df.loc[env.current_step - 1, 'Close']
         prices.append(current_price)
+
+        adx = env.df.loc[env.current_step - 1, 'ADX']
+        adx_values.append(adx)
+
+        # During the evaluation loop
+        current_rsi = env.df.loc[env.current_step - 1, 'RSI']
+        rsi_values.append(current_rsi)
+
         timestamps.append(t)
 
         # Record trade actions
@@ -50,21 +60,19 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
                 'price': current_price,
                 'type': 'Buy'
             })
-        elif action == 2 and prev_shares_held > 0 and env.shares_held == 0:
+        elif prev_shares_held > 0 and env.shares_held == 0:
+            # Sell or Stop-Loss action
+            if action == 2:
+                trade_type = 'Sell'
+            else:
+                trade_type = 'Stop-Loss'
             # Sell action
             trade_positions.append({
                 'time': t,
                 'price': current_price,
-                'type': 'Sell'
+                'type': trade_type
             })
-        elif prev_shares_held > 0 and env.shares_held == 0 and action == 0:
-            # Stop-loss triggered
-            trade_positions.append({
-                'time': t,
-                'price': current_price,
-                'type': 'Stop-Loss'
-            })
-
+        
         # Update previous shares held
         prev_shares_held = env.shares_held
         if done:
@@ -79,9 +87,10 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     plt.savefig('net_worth_over_time.png')
     plt.close()
 
-    # Plotting price chart with entry and exit points
-    plt.figure(figsize=(12, 6))
-    plt.plot(prices, label='Price')
+    # Plotting price chart with entry and exit points and ADX
+    fig, ax1 = plt.subplots(2, 1, figsize=(14, 10), height_ratios=[3, 1], sharex=True)
+    # Plot the price on the first subplot
+    ax1[0].plot(timestamps, prices, label='Price')
 
     # Extract trade positions
     buy_times = [trade['time'] for trade in trade_positions if trade['type'] == 'Buy']
@@ -92,15 +101,37 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     stoploss_prices = [trade['price'] for trade in trade_positions if trade['type'] == 'Stop-Loss']
 
     # Plot trade markers
-    plt.scatter(buy_times, buy_prices, marker='^', color='g', label='Buy', s=100)
-    plt.scatter(sell_times, sell_prices, marker='v', color='r', label='Sell', s=100)
-    plt.scatter(stoploss_times, stoploss_prices, marker='x', color='k', label='Stop-Loss', s=100)
+    ax1[0].scatter(buy_times, buy_prices, marker='^', color='g', label='Buy', s=100)
+    ax1[0].scatter(sell_times, sell_prices, marker='v', color='r', label='Sell', s=100)
+    ax1[0].scatter(stoploss_times, stoploss_prices, marker='x', color='k', label='Stop-Loss[Trailing]', s=100)
 
-    plt.title('Price Chart with Entry and Exit Points')
-    plt.xlabel('Time Steps')
-    plt.ylabel('Price')
-    plt.legend()
-    plt.savefig('price_chart_with_trades.png')
+    ax1[0].set_title('Price Chart with Entry and Exit Points')
+    ax1[0].set_xlabel('Time Steps')
+    ax1[0].set_ylabel('Price')
+    ax1[0].legend()
+    ax1[0].grid(True)
+
+    # Plot ADX on the second subplot
+    # ax1[1].plot(timestamps, adx_values, label='ADX', color='b')
+    # ax1[1].axhline(y=25, color='r', linestyle='--', label='ADX Threshold (25)')
+    # ax1[1].set_title('Average Directional Index (ADX)')
+    # ax1[1].set_xlabel('Time Steps')
+    # ax1[1].set_ylabel('ADX Value')
+    # ax1[1].legend()
+    # ax1[1].grid(True)
+
+    # Plot RSI on the third subplot
+    ax1[1].plot(timestamps, rsi_values, label='RSI', color='purple')
+    ax1[1].axhline(y=70, color='r', linestyle='--', label='Overbought (70)')
+    ax1[1].axhline(y=30, color='g', linestyle='--', label='Oversold (30)')
+    ax1[1].set_title('Relative Strength Index (RSI)')
+    ax1[1].set_xlabel('Time Steps')
+    ax1[1].set_ylabel('RSI Value')
+    ax1[1].legend()
+    ax1[1].grid(True)
+
+    plt.tight_layout()
+    plt.savefig('price_chart_with_trades_and_adx.png')
     plt.close()
 
     print(f"Final Net Worth: ${env.net_worth:.2f}")
@@ -114,7 +145,7 @@ if __name__ == "__main__":
 
     current_datetime = datetime.now().strftime("%Y%m%d%H%M%S")
     # model_save_path = f'best_model_{current_datetime}.pth'
-    model_save_path = 'best_model_20240926093201.pth'
+    model_save_path = 'best_model_20241003153923.pth'
     env = TradingEnv(df, n_steps=n_steps, fee_structure='per_share')
 
     # Get the input size from the environment

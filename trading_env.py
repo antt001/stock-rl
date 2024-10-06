@@ -36,9 +36,24 @@ class TradingEnv(Env):
         self.stop_loss_price = None
         self.prev_net_worth = self.net_worth
         self.fee_structure = fee_structure  # 'percentage' or 'per_share'
+        # Trailing Stop-Loss Variables
+        self.trailing_stop_loss = True  # Enable or disable trailing stop-loss
+        self.trailing_stop_distance = 0.02  # 1% trailing stop-loss
+        self.highest_price = 0  # Highest price since entering the position
+
+        # Extract features
+        self.features = ['Open', 'High', 'Low', 'Close', 'Volume',
+                    'MA_Short', 'MA_Medium', 'MA_Long',
+                    'BB_Upper', 'BB_Lower', 'ATR',
+                    'MA_Difference', 
+                    # 'MA_Crossover',
+                    # 'ADX', 
+                    # 'MACD', 
+                    # 'MACD_Signal', 'RSI'
+                    ]
 
         # Observation space dimensions
-        self.num_features = 11  # Number of features per time step
+        self.num_features = len(self.features) # Number of features per time step
         self.additional_vars = 3  # balance, shares held, net worth
         obs_shape = (self.n_steps, self.num_features + self.additional_vars)
         self.observation_space = Box(
@@ -65,13 +80,8 @@ class TradingEnv(Env):
 
         history = self.df.iloc[start:end]
 
-        # Extract features
-        features = ['Open', 'High', 'Low', 'Close', 'Volume',
-                    'MA_Short', 'MA_Medium', 'MA_Long',
-                    'BB_Upper', 'BB_Lower', 'ATR']
-
         # Calculate percentage change
-        obs = history[features].pct_change().fillna(0).values
+        obs = history[self.features].pct_change().fillna(0).values
 
         # Include additional state variables
         additional_vars = np.array([self.balance, self.shares_held, self.net_worth])
@@ -89,6 +99,16 @@ class TradingEnv(Env):
         # Get current price and ATR
         current_price = self.df.loc[self.current_step, 'Close']
         current_atr = self.df.loc[self.current_step, 'ATR']
+
+        # Update the highest price and trailing stop-loss
+        if self.shares_held > 0:
+            if current_price > self.highest_price:
+                self.highest_price = current_price
+                # Update trailing stop-loss price
+                if self.trailing_stop_loss:
+                    self.stop_loss_price = self.highest_price * (1 - self.trailing_stop_distance)
+        else:
+            self.highest_price = 0  # Reset when not in position
 
          # Determine transaction cost based on fee structure
         def get_transaction_cost(trade_value, shares_traded):
@@ -112,21 +132,29 @@ class TradingEnv(Env):
                 position_size, self.balance // current_price
             )
 
-            # Calculate trade value
-            trade_value = shares_to_buy * current_price
+            if shares_to_buy > 0:
+                # Calculate trade value
+                trade_value = shares_to_buy * current_price
 
-            # Calculate transaction cost
-            transaction_cost = get_transaction_cost(trade_value, shares_to_buy)
+                # Calculate transaction cost
+                transaction_cost = get_transaction_cost(trade_value, shares_to_buy)
 
-            # Update balance and shares held
-            total_cost = trade_value + transaction_cost
+                # Update balance and shares held
+                total_cost = trade_value + transaction_cost
 
-            self.balance -= total_cost
-            self.shares_held += shares_to_buy
-            self.entry_price = current_price  # Set entry price for stop-loss calculation
+                self.balance -= total_cost
+                self.shares_held += shares_to_buy
+                self.entry_price = current_price  # Set entry price for stop-loss calculation
 
-            # Calculate stop-loss price
-            self.stop_loss_price = self.entry_price - (current_atr * atr_multiplier)
+                # Initialize highest price and stop-loss price
+                self.highest_price = current_price
+                if self.trailing_stop_loss:
+                    self.stop_loss_price = self.highest_price * (1 - self.trailing_stop_distance)
+                else:
+                    self.stop_loss_price = self.entry_price - (current_atr * atr_multiplier)
+            else:
+                # Not enough balance to buy
+                pass
 
         elif action == 2:  # Sell
             # Sell all shares held
@@ -139,6 +167,8 @@ class TradingEnv(Env):
             self.balance += total_proceeds
             self.shares_held = 0
             self.entry_price = 0
+            # Reset highest price and stop-loss price
+            self.highest_price = 0
             self.stop_loss_price = None
 
         else:  # Hold
@@ -159,6 +189,7 @@ class TradingEnv(Env):
             self.shares_held = 0
             self.entry_price = 0
             self.stop_loss_price = None
+            self.highest_price = 0
             # print(f"Stop-loss triggered at price {current_price:.2f}")
 
         # Update net worth after action

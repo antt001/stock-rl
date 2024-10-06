@@ -6,3 +6,4 @@ matplotlib
 yfinance
 tqdm
 Tcl
+ta

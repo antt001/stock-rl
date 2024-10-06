@@ -132,7 +132,7 @@ agent = DQNAgent(input_size, action_size)
 model_save_path = f'best_model_{current_datetime}.pth'
 
 # Train the agent
-train_dqn(env, agent, episodes=80, batch_size=32, save_path=model_save_path)
+train_dqn(env, agent, episodes=100, batch_size=32, save_path=model_save_path)
 
 # Evaluate the agent
 evaluate_agent(env, agent, load_path=model_save_path)

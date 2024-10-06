@@ -1,4 +1,6 @@
 import yfinance as yf
+import numpy as np
+import ta
 
 def load_data(ticker, start, end):
     # load data from yfinance
@@ -14,6 +16,24 @@ def load_data(ticker, start, end):
     df['MA_Short'] = df['Close'].rolling(window=10).mean()
     df['MA_Medium'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['MA_Long'] = df['Close'].rolling(window=50).mean()
+
+    # Moving Average Crossovers
+    df['MA_Difference'] = df['MA_Short'] - df['MA_Long']
+    df['MA_Crossover'] = np.where(df['MA_Short'] > df['MA_Long'], 1, 0)
+
+    # Average Directional Index (ADX)
+    df['ADX'] = ta.trend.ADXIndicator(df['High'], df['Low'], df['Close'], window=14).adx()
+    df['ADX'] = df['ADX'].fillna(0)
+
+    # Moving Average Convergence Divergence (MACD)
+    macd = ta.trend.MACD(df['Close'])
+    df['MACD'] = macd.macd()
+    df['MACD_Signal'] = macd.macd_signal()
+    df[['MACD', 'MACD_Signal']] = df[['MACD', 'MACD_Signal']].fillna(0)
+
+    # Relative Strength Index (RSI)
+    df['RSI'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+    df['RSI'] = df['RSI'].fillna(0)
 
     # Compute Bollinger Bands
     df['BB_Middle'] = df['Close'].rolling(window=20).mean()
