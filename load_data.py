@@ -1,6 +1,6 @@
 import yfinance as yf
 import numpy as np
-import ta
+import talib
 
 def load_data(ticker, start, end):
     # load data from yfinance
@@ -22,17 +22,18 @@ def load_data(ticker, start, end):
     df['MA_Crossover'] = np.where(df['MA_Short'] > df['MA_Long'], 1, 0)
 
     # Average Directional Index (ADX)
-    df['ADX'] = ta.trend.ADXIndicator(df['High'], df['Low'], df['Close'], window=14).adx()
+    df['ADX'] = talib.ADX(df['High'].values.reshape(-1), df['Low'].values.reshape(-1), df['Close'].values.reshape(-1), timeperiod=14)
     df['ADX'] = df['ADX'].fillna(0)
 
     # Moving Average Convergence Divergence (MACD)
-    macd = ta.trend.MACD(df['Close'])
-    df['MACD'] = macd.macd()
-    df['MACD_Signal'] = macd.macd_signal()
+    macd, macdsignal, macdhist = talib.MACD(df['Close'].values.reshape(-1), fastperiod=12, slowperiod=26, signalperiod=9)
+    df['MACD'] = macd
+    df['MACD_Signal'] = macdsignal
     df[['MACD', 'MACD_Signal']] = df[['MACD', 'MACD_Signal']].fillna(0)
 
     # Relative Strength Index (RSI)
-    df['RSI'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+    # df['RSI'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+    df['RSI'] = talib.RSI(df['Close'].values.reshape(-1), timeperiod=14)
     df['RSI'] = df['RSI'].fillna(0)
 
     # Compute Bollinger Bands

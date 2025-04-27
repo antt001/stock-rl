@@ -97,8 +97,8 @@ class TradingEnv(Env):
         self.prev_net_worth = self.net_worth
 
         # Get current price and ATR
-        current_price = self.df.loc[self.current_step, 'Close']
-        current_atr = self.df.loc[self.current_step, 'ATR']
+        current_price = self.df.loc[self.current_step, 'Close'].item()
+        current_atr = self.df.loc[self.current_step, 'ATR'].item()
 
         # Update the highest price and trailing stop-loss
         if self.shares_held > 0:
