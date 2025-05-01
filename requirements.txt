@@ -8,4 +8,6 @@ tqdm
 Tcl
 ta-lib
 beautifulsoup4
+html5lib
+lxml
 requests
