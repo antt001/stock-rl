@@ -7,3 +7,5 @@ yfinance==0.2.56
 tqdm
 Tcl
 ta-lib
+beautifulsoup4
+requests
