@@ -31,12 +31,12 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     prev_shares_held = env.shares_held  # Track shares held from the previous step
 
     
-        net_worths = np.array(net_worths)
+    net_worths = np.array(net_worths)
     
-        for t in range(env.total_steps - env.n_steps):
-            with torch.no_grad():
-                q_values = agent(state)
-                action = torch.argmax(q_values).item()
+    for t in range(env.total_steps - env.n_steps):
+        with torch.no_grad():
+            q_values = agent(state)
+            action = torch.argmax(q_values).item()
         next_state, reward, done, _ = env.step(action)
         state = torch.FloatTensor(next_state).unsqueeze(0).to(device)
         total_reward += reward

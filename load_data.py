@@ -6,7 +6,7 @@ from sklearn.preprocessing import RobustScaler
 
 def load_data(ticker, start, end):
     # load data from yfinance
-    df = yf.download(ticker, start=start, end=end)
+    df = yf.download(ticker, start=start, end=end, progress=False)
     # Sort the data by date if not already sorted
     df.sort_values('Date', inplace=True)
 
