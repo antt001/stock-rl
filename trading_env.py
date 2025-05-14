@@ -16,9 +16,11 @@ from gym.spaces import Discrete, Box
 INITIAL_BALANCE = 10000
 
 class TradingEnv(Env):
-    def __init__(self, df, n_steps=10, initial_balance=10000, fee_structure='percentage'):
+    def __init__(self, df, scaler, n_steps=10, initial_balance=10000, fee_structure='percentage', use_safeguards=True):
         super(TradingEnv, self).__init__()
         self.df = df
+        self.scaler = scaler
+        self.use_safeguards = use_safeguards
         self.n_steps = n_steps
         self.initial_balance = initial_balance
         self.total_steps = len(df) - 1
@@ -48,8 +50,8 @@ class TradingEnv(Env):
                     'MA_Difference', 
                     # 'MA_Crossover',
                     # 'ADX', 
-                    # 'MACD', 
-                    # 'MACD_Signal', 'RSI'
+                    'MACD',
+                    'MACD_Signal', 'RSI', 'OBV'
                     ]
 
         # Observation space dimensions
@@ -80,8 +82,17 @@ class TradingEnv(Env):
 
         history = self.df.iloc[start:end]
 
-        # Calculate percentage change
-        obs = history[self.features].pct_change().fillna(0).values
+        # Scale the features
+        # Ensure we only try to scale columns that exist in the history and are in self.features
+        features_to_scale = [col for col in self.features if col in history.columns]
+        scaled_features = history[features_to_scale].copy() # Use .copy() to avoid SettingWithCopyWarning
+
+        # Apply scaling only to numerical columns among the selected features
+        numerical_features_to_scale = scaled_features.select_dtypes(include=np.number).columns
+        if not numerical_features_to_scale.empty:
+            scaled_features[numerical_features_to_scale] = self.scaler.transform(scaled_features[numerical_features_to_scale])
+
+        obs = scaled_features.fillna(0).values
 
         # Include additional state variables
         additional_vars = np.array([self.balance, self.shares_held, self.net_worth])
@@ -125,12 +136,20 @@ class TradingEnv(Env):
             max_loss = self.net_worth * 0.02  # Risk no more than 2% of net worth
             atr_multiplier = 1  # Adjust as needed
             stop_loss_distance = current_atr * atr_multiplier
-            position_size = max_loss / stop_loss_distance
+            if self.use_safeguards:
+                position_size = max_loss / stop_loss_distance
+            else:
+                position_size = self.balance / current_price # Buy as much as possible
 
             # Ensure we don't buy more than we can afford
             shares_to_buy = min(
                 position_size, self.balance // current_price
             )
+
+            # Limit the maximum percentage of balance risked on a single trade
+            max_risk_percentage = 0.5  # Risk no more than 50% of balance
+            max_shares_to_buy = (self.balance * max_risk_percentage) // current_price
+            shares_to_buy = min(shares_to_buy, max_shares_to_buy)
 
             if shares_to_buy > 0:
                 # Calculate trade value
@@ -198,6 +217,11 @@ class TradingEnv(Env):
 
         # Calculate reward as step-wise profit/loss
         reward = self.net_worth - self.prev_net_worth
+
+        # Penalize large drawdowns
+        drawdown = self.max_net_worth - self.net_worth
+        if drawdown > self.initial_balance * 0.1:
+            reward -= drawdown / self.initial_balance
 
         # Update previous net worth for next step
         self.prev_net_worth = self.net_worth

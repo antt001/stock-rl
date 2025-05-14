@@ -74,8 +74,7 @@ def train_dqn(env, agent, episodes=50, batch_size=32, gamma=0.99,
                   f"Net Worth: ${final_net_worth:.2f}")
 
         # Decay epsilon
-        if epsilon > epsilon_min:
-            epsilon *= epsilon_decay
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
 
     # Save the model
     torch.save(agent.state_dict(), f'last_model_{current_datetime}.pth')
@@ -113,13 +112,13 @@ def train_minibatch(agent, optimizer, criterion, minibatch, gamma, device):
 
 # Training loop
 
-df = load_data('AAPL', start='2020-01-01', end='2023-12-31')
+df, scaler = load_data('AAPL', start='2020-01-01', end='2023-12-31')
 
 # Set the window size for past observations
 n_steps = 10  # Adjust as needed
 
 # Initialize the environment
-env = TradingEnv(df, n_steps=n_steps, fee_structure='per_share')
+env = TradingEnv(df, scaler, n_steps=n_steps, fee_structure='per_share')
 
 # Get the input size from the environment
 input_size = env.observation_space.shape[1]

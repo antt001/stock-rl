@@ -1,6 +1,8 @@
 import yfinance as yf
 import numpy as np
 import talib
+import pandas as pd
+from sklearn.preprocessing import RobustScaler
 
 def load_data(ticker, start, end):
     # load data from yfinance
@@ -36,6 +38,10 @@ def load_data(ticker, start, end):
     df['RSI'] = talib.RSI(df['Close'].values.reshape(-1), timeperiod=14)
     df['RSI'] = df['RSI'].fillna(0)
 
+    # On Balance Volume (OBV)
+    df['OBV'] = talib.OBV(df['Close'].values.reshape(-1), df['Volume'].values.reshape(-1))
+    df['OBV'] = df['OBV'].fillna(0)
+
     # Compute Bollinger Bands
     df['BB_Middle'] = df['Close'].rolling(window=20).mean()
     df['BB_STD'] = df['Close'].rolling(window=20).std()
@@ -57,7 +63,12 @@ def load_data(ticker, start, end):
     # Handle NaN values after adding indicators
     df.fillna(method='bfill', inplace=True)
 
+    # Apply robust scaling
+    numerical_cols = df.select_dtypes(include=['number']).columns
+    scaler = RobustScaler()
+    df[numerical_cols] = scaler.fit_transform(df[numerical_cols])
+
     # Reset index after adding indicators
     df.reset_index(drop=True, inplace=True)
 
-    return df
+    return df, scaler

@@ -6,6 +6,7 @@ from trading_env import TradingEnv
 from dqn_agent import DQNAgent
 from datetime import datetime
 from load_data import load_data
+import numpy as np
 
 def evaluate_agent(env, agent, load_path='best_model.pth'):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -29,11 +30,13 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
 
     prev_shares_held = env.shares_held  # Track shares held from the previous step
 
-    for t in range(env.total_steps - env.n_steps):
-        with torch.no_grad():
-            q_values = agent(state)
-            action = torch.argmax(q_values).item()
-
+    
+        net_worths = np.array(net_worths)
+    
+        for t in range(env.total_steps - env.n_steps):
+            with torch.no_grad():
+                q_values = agent(state)
+                action = torch.argmax(q_values).item()
         next_state, reward, done, _ = env.step(action)
         state = torch.FloatTensor(next_state).unsqueeze(0).to(device)
         total_reward += reward
@@ -134,26 +137,52 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     plt.savefig('price_chart_with_trades_and_adx.png')
     plt.close()
 
+    net_worths = np.array(net_worths)
+    returns = np.diff(net_worths) / net_worths[:-1]
+
+    # Sharpe Ratio (assuming risk-free rate of 0)
+    sharpe_ratio = np.mean(returns) / np.std(returns) if np.std(returns) > 0 else 0
+
+    # Maximum Drawdown
+    peak = np.maximum.accumulate(net_worths)
+    drawdown = (net_worths - peak) / peak
+    max_drawdown = np.min(drawdown)
+
     print(f"Final Net Worth: ${env.net_worth:.2f}")
     print(f"Total Reward from Evaluation: {total_reward:.2f}")
+    print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
+    print(f"Maximum Drawdown: {max_drawdown:.2f}")
 
 if __name__ == "__main__":
 
-    df = load_data('AAPL', start='2024-01-01', end='2024-12-31')
-    # Before initializing the environment
+    # Load data for training, validation, and testing
+    train_df, train_scaler = load_data('AAPL', start='2024-01-01', end='2024-09-30')
+    val_df, val_scaler = load_data('AAPL', start='2024-10-01', end='2024-11-30')
+    test_df, test_scaler = load_data('AAPL', start='2024-12-01', end='2024-12-31')
+
     n_steps = 10  # Adjust as needed
 
-    current_datetime = datetime.now().strftime("%Y%m%d%H%M%S")
-    # model_save_path = f'best_model_{current_datetime}.pth'
-    model_save_path = 'best_model_20241003153923.pth'
-    env = TradingEnv(df, n_steps=n_steps, fee_structure='per_share')
+    # Create trading environments for each dataset
+    train_env = TradingEnv(train_df, train_scaler, n_steps=n_steps, fee_structure='per_share')
+    val_env = TradingEnv(val_df, val_scaler, n_steps=n_steps, fee_structure='per_share')
+    test_env = TradingEnv(test_df, test_scaler, n_steps=n_steps, fee_structure='per_share')
 
     # Get the input size from the environment
-    input_size = env.observation_space.shape[1]
-    action_size = env.action_space.n
+    input_size = train_env.observation_space.shape[1]
+    action_size = train_env.action_space.n
 
     # Initialize the agent
     agent = DQNAgent(input_size, action_size)
 
-    # Evaluate the agent
-    evaluate_agent(env, agent, load_path=model_save_path)
+    current_datetime = datetime.now().strftime("%Y%m%d%H%M%S")
+    model_save_path = 'best_model_20241003153923.pth'
+
+    # Evaluate the agent on each environment
+    print("Training Set Evaluation:")
+    evaluate_agent(train_env, agent, load_path=model_save_path)
+
+    print("\nValidation Set Evaluation:")
+    evaluate_agent(val_env, agent, load_path=model_save_path)
+
+    print("\nTest Set Evaluation:")
+    evaluate_agent(test_env, agent, load_path=model_save_path)
