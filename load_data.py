@@ -39,7 +39,7 @@ def load_data(ticker, start, end):
     df['RSI'] = df['RSI'].fillna(0)
 
     # On Balance Volume (OBV)
-    df['OBV'] = talib.OBV(df['Close'].values.reshape(-1), df['Volume'].values.reshape(-1))
+    df['OBV'] = talib.OBV(df['Close'].values.reshape(-1), np.array(df['Volume'].values.reshape(-1), dtype=np.double))
     df['OBV'] = df['OBV'].fillna(0)
 
     # Compute Bollinger Bands
@@ -61,14 +61,9 @@ def load_data(ticker, start, end):
     df.drop(['H-L', 'H-PC', 'L-PC', 'TR'], axis=1, inplace=True)
 
     # Handle NaN values after adding indicators
-    df.fillna(method='bfill', inplace=True)
-
-    # Apply robust scaling
-    numerical_cols = df.select_dtypes(include=['number']).columns
-    scaler = RobustScaler()
-    df[numerical_cols] = scaler.fit_transform(df[numerical_cols])
+    df.bfill(inplace=True)
 
     # Reset index after adding indicators
     df.reset_index(drop=True, inplace=True)
 
-    return df, scaler
+    return df

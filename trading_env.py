@@ -15,6 +15,16 @@ from gym.spaces import Discrete, Box
 
 INITIAL_BALANCE = 10000
 
+FEATURES_SET = ['Open', 'High', 'Low', 'Close', 'Volume',
+    'MA_Short', 'MA_Medium', 'MA_Long',
+    'BB_Upper', 'BB_Lower', 'ATR',
+    'MA_Difference', 
+    # 'MA_Crossover',
+    # 'ADX', 
+    'MACD',
+    'MACD_Signal', 'RSI', 'OBV'
+    ]
+
 class TradingEnv(Env):
     def __init__(self, df, scaler, n_steps=10, initial_balance=10000, fee_structure='percentage', use_safeguards=True):
         super(TradingEnv, self).__init__()
@@ -44,15 +54,7 @@ class TradingEnv(Env):
         self.highest_price = 0  # Highest price since entering the position
 
         # Extract features
-        self.features = ['Open', 'High', 'Low', 'Close', 'Volume',
-                    'MA_Short', 'MA_Medium', 'MA_Long',
-                    'BB_Upper', 'BB_Lower', 'ATR',
-                    'MA_Difference', 
-                    # 'MA_Crossover',
-                    # 'ADX', 
-                    'MACD',
-                    'MACD_Signal', 'RSI', 'OBV'
-                    ]
+        self.features = FEATURES_SET
 
         # Observation space dimensions
         self.num_features = len(self.features) # Number of features per time step

@@ -3,7 +3,7 @@ numpy
 pandas
 gym
 matplotlib
-yfinance==0.2.56
+yfinance==0.2.61
 tqdm
 Tcl
 ta-lib

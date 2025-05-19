@@ -1,13 +1,14 @@
 import random
 from collections import deque
 
-from trading_env import TradingEnv
+from trading_env import TradingEnv, FEATURES_SET
 from dqn_agent import DQNAgent
 from evaluation import evaluate_agent
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from datetime import datetime
+from sklearn.preprocessing import RobustScaler
 from load_data import load_data
 
 import matplotlib.pyplot as plt
@@ -112,7 +113,32 @@ def train_minibatch(agent, optimizer, criterion, minibatch, gamma, device):
 
 # Training loop
 
-df, scaler = load_data('AAPL', start='2020-01-01', end='2023-12-31')
+df = load_data('AAPL', start='2020-01-01', end='2023-12-31')
+
+# Define features to scale (from trading_env.py)
+features_to_scale = ['Open', 'High', 'Low', 'Close', 'Volume',
+                    'MA_Short', 'MA_Medium', 'MA_Long',
+                    'BB_Upper', 'BB_Lower', 'ATR',
+                    'MA_Difference',
+                    # 'MA_Crossover',
+                    # 'ADX',
+                    'MACD',
+                    'MACD_Signal', 'RSI', 'OBV'
+                    ]
+
+# Initialize and fit the scaler
+scaler = RobustScaler()
+# Ensure only existing columns in df are used for fitting
+numerical_cols_to_fit = [col for col in features_to_scale if col in df.columns and df[col].dtypes in ['int64', 'float64']]
+if numerical_cols_to_fit:
+    scaler.fit(df[numerical_cols_to_fit])
+else:
+    # Handle the case where no numerical columns are found or features_to_scale is empty
+    # This might involve logging a warning or raising an error, depending on desired behavior.
+    # For now, we'll proceed with an unfitted scaler if no suitable columns are found,
+    # though this would likely cause issues later in TradingEnv if scaling is expected.
+    print("Warning: No numerical columns found to fit the scaler. Scaler will not be fitted.")
+
 
 # Set the window size for past observations
 n_steps = 10  # Adjust as needed
