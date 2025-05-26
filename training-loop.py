@@ -10,6 +10,7 @@ import torch.optim as optim
 from datetime import datetime
 from sklearn.preprocessing import RobustScaler
 from load_data import load_data
+import numpy as np
 
 import matplotlib.pyplot as plt
 
@@ -129,8 +130,9 @@ features_to_scale = ['Open', 'High', 'Low', 'Close', 'Volume',
 # Initialize and fit the scaler
 scaler = RobustScaler()
 # Ensure only existing columns in df are used for fitting
-numerical_cols_to_fit = [col for col in features_to_scale if col in df.columns and df[col].dtypes in ['int64', 'float64']]
-if numerical_cols_to_fit:
+# numerical_cols_to_fit = [col for col in features_to_scale if col in df.columns and df[col].dtypes in ['int64', 'float64']]
+numerical_cols_to_fit = df[features_to_scale].select_dtypes(include=np.number).columns
+if len(numerical_cols_to_fit):
     scaler.fit(df[numerical_cols_to_fit])
 else:
     # Handle the case where no numerical columns are found or features_to_scale is empty
