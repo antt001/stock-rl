@@ -91,9 +91,12 @@ class TradingEnv(Env):
 
         # Apply scaling only to numerical columns among the selected features
         numerical_features_to_scale = scaled_features.select_dtypes(include=np.number).columns
-        if not numerical_features_to_scale.empty:
-            scaled_features[numerical_features_to_scale] = self.scaler.transform(scaled_features[numerical_features_to_scale])
-
+        if self.scaler is not None:
+            if not numerical_features_to_scale.empty:
+                scaled_features[numerical_features_to_scale] = self.scaler.transform(scaled_features[numerical_features_to_scale])
+        else:
+            scaled_features[numerical_features_to_scale] = scaled_features[numerical_features_to_scale].pct_change()
+        
         obs = scaled_features.fillna(0).values
 
         # Include additional state variables
@@ -230,7 +233,7 @@ class TradingEnv(Env):
 
         # Move to the next step
         self.current_step += 1
-        done = self.current_step >= self.total_steps
+        done = self.current_step >= self.total_steps or self.net_worth <= 0
 
         # Get next observation
         obs = self._next_observation()

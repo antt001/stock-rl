@@ -42,7 +42,7 @@ def train_dqn(env, agent, episodes=50, batch_size=32, gamma=0.99,
             else:
                 with torch.no_grad():
                     q_values = agent(state)
-                    action = torch.argmax(q_values).item()
+                    action = torch.argmax(q_values[:, -1, :], dim=1).item()
 
             # Take action and observe result
             next_state, reward, done, _ = env.step(action)
@@ -95,17 +95,19 @@ def train_minibatch(agent, optimizer, criterion, minibatch, gamma, device):
     dones = torch.FloatTensor(dones).to(device)
 
     # Current Q values
-    current_q_values = agent(states).gather(1, actions)
+    q_all_current_actions = agent(states)[:, -1, :]  # Q-values from the last time step
+    current_q_values_for_actions_taken = q_all_current_actions.gather(1, actions)
 
     # Next Q values
     with torch.no_grad():
-        max_next_q_values = agent(next_states).max(1)[0]
+        max_next_q_values = agent(next_states)[:, -1, :].max(1)[0]
 
     # Target Q values
     target_q_values = rewards + (gamma * max_next_q_values * (1 - dones))
+    target_q_values = target_q_values.unsqueeze(1)
 
     # Compute loss
-    loss = criterion(current_q_values.squeeze(), target_q_values)
+    loss = criterion(current_q_values_for_actions_taken, target_q_values)
 
     # Optimize the model
     optimizer.zero_grad()
@@ -114,7 +116,7 @@ def train_minibatch(agent, optimizer, criterion, minibatch, gamma, device):
 
 # Training loop
 
-df = load_data('AAPL', start='2020-01-01', end='2023-12-31')
+df = load_data('AAPL', start='2004-01-01', end='2024-12-31')
 
 # Define features to scale (from trading_env.py)
 features_to_scale = ['Open', 'High', 'Low', 'Close', 'Volume',
@@ -128,18 +130,19 @@ features_to_scale = ['Open', 'High', 'Low', 'Close', 'Volume',
                     ]
 
 # Initialize and fit the scaler
-scaler = RobustScaler()
+scaler = None
+# scaler = RobustScaler()
 # Ensure only existing columns in df are used for fitting
 # numerical_cols_to_fit = [col for col in features_to_scale if col in df.columns and df[col].dtypes in ['int64', 'float64']]
-numerical_cols_to_fit = df[features_to_scale].select_dtypes(include=np.number).columns
-if len(numerical_cols_to_fit):
-    scaler.fit(df[numerical_cols_to_fit])
-else:
+# numerical_cols_to_fit = df[features_to_scale].select_dtypes(include=np.number).columns
+# if len(numerical_cols_to_fit):
+#     scaler.fit(df[numerical_cols_to_fit])
+# else:
     # Handle the case where no numerical columns are found or features_to_scale is empty
     # This might involve logging a warning or raising an error, depending on desired behavior.
     # For now, we'll proceed with an unfitted scaler if no suitable columns are found,
     # though this would likely cause issues later in TradingEnv if scaling is expected.
-    print("Warning: No numerical columns found to fit the scaler. Scaler will not be fitted.")
+    # print("Warning: No numerical columns found to fit the scaler. Scaler will not be fitted.")
 
 
 # Set the window size for past observations
@@ -159,7 +162,7 @@ agent = DQNAgent(input_size, action_size)
 model_save_path = f'best_model_{current_datetime}.pth'
 
 # Train the agent
-train_dqn(env, agent, episodes=100, batch_size=32, save_path=model_save_path)
+train_dqn(env, agent, episodes=300, batch_size=32, save_path=model_save_path)
 
 # Evaluate the agent
 evaluate_agent(env, agent, load_path=model_save_path)

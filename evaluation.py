@@ -31,7 +31,6 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     prev_shares_held = env.shares_held  # Track shares held from the previous step
 
     
-    net_worths = np.array(net_worths)
     
     for t in range(env.total_steps - env.n_steps):
         with torch.no_grad():
@@ -154,11 +153,14 @@ def evaluate_agent(env, agent, load_path='best_model.pth'):
     print(f"Maximum Drawdown: {max_drawdown:.2f}")
 
 if __name__ == "__main__":
+    train_scaler = None
+    val_scaler = None
+    test_scaler = None
 
     # Load data for training, validation, and testing
-    train_df, train_scaler = load_data('AAPL', start='2024-01-01', end='2024-09-30')
-    val_df, val_scaler = load_data('AAPL', start='2024-10-01', end='2024-11-30')
-    test_df, test_scaler = load_data('AAPL', start='2024-12-01', end='2024-12-31')
+    train_df = load_data('AAPL', start='2024-01-01', end='2024-09-30')
+    val_df = load_data('AAPL', start='2024-10-01', end='2024-11-30')
+    test_df = load_data('AAPL', start='2024-12-01', end='2024-12-31')
 
     n_steps = 10  # Adjust as needed
 
@@ -175,7 +177,7 @@ if __name__ == "__main__":
     agent = DQNAgent(input_size, action_size)
 
     current_datetime = datetime.now().strftime("%Y%m%d%H%M%S")
-    model_save_path = 'best_model_20241003153923.pth'
+    model_save_path = 'best_model_20250601133350.pth'
 
     # Evaluate the agent on each environment
     print("Training Set Evaluation:")
