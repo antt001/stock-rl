@@ -18,11 +18,14 @@ INITIAL_BALANCE = 10000
 FEATURES_SET = ['Open', 'High', 'Low', 'Close', 'Volume',
     'MA_Short', 'MA_Medium', 'MA_Long',
     'BB_Upper', 'BB_Lower', 'ATR',
-    'MA_Difference', 
+    'MA_Difference',
     # 'MA_Crossover',
-    # 'ADX', 
+    'ADX', # Added/Ensured
     'MACD',
-    'MACD_Signal', 'RSI', 'OBV'
+    'MACD_Signal', 'RSI', 'OBV',
+    'PLUS_DI', # Added
+    'MINUS_DI', # Added
+    'Volume_MA' # Added
     ]
 
 class TradingEnv(Env):

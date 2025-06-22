@@ -23,24 +23,36 @@ def load_data(ticker, start, end):
     df['MA_Difference'] = df['MA_Short'] - df['MA_Long']
     df['MA_Crossover'] = np.where(df['MA_Short'] > df['MA_Long'], 1, 0)
 
+    high = df['High'].values.reshape(-1)
+    low = df['Low'].values.reshape(-1)
+    close = df['Close'].values.reshape(-1)
     # Average Directional Index (ADX)
-    df['ADX'] = talib.ADX(df['High'].values.reshape(-1), df['Low'].values.reshape(-1), df['Close'].values.reshape(-1), timeperiod=14)
+    df['ADX'] = talib.ADX(high, low, close, timeperiod=14)
     df['ADX'] = df['ADX'].fillna(0)
 
+    # Directional Movement Index (DMI)
+    df['PLUS_DI'] = talib.PLUS_DI(high, low, close, timeperiod=14)
+    df['MINUS_DI'] = talib.MINUS_DI(high, low, close, timeperiod=14)
+    df[['PLUS_DI', 'MINUS_DI']] = df[['PLUS_DI', 'MINUS_DI']].fillna(0)
+
     # Moving Average Convergence Divergence (MACD)
-    macd, macdsignal, macdhist = talib.MACD(df['Close'].values.reshape(-1), fastperiod=12, slowperiod=26, signalperiod=9)
+    macd, macdsignal, macdhist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
     df['MACD'] = macd
     df['MACD_Signal'] = macdsignal
     df[['MACD', 'MACD_Signal']] = df[['MACD', 'MACD_Signal']].fillna(0)
 
     # Relative Strength Index (RSI)
     # df['RSI'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
-    df['RSI'] = talib.RSI(df['Close'].values.reshape(-1), timeperiod=14)
+    df['RSI'] = talib.RSI(close, timeperiod=14)
     df['RSI'] = df['RSI'].fillna(0)
 
     # On Balance Volume (OBV)
-    df['OBV'] = talib.OBV(df['Close'].values.reshape(-1), np.array(df['Volume'].values.reshape(-1), dtype=np.double))
+    df['OBV'] = talib.OBV(close, np.array(df['Volume'].values.reshape(-1), dtype=np.double))
     df['OBV'] = df['OBV'].fillna(0)
+
+    # Volume Moving Average
+    df['Volume_MA'] = df['Volume'].rolling(window=20).mean()
+    df['Volume_MA'] = df['Volume_MA'].fillna(0)
 
     # Compute Bollinger Bands
     df['BB_Middle'] = df['Close'].rolling(window=20).mean()
